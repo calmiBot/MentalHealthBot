@@ -1,6 +1,4 @@
-# Mental Health Bot Dockerfile
-# Multi-stage build for smaller image size
-
+# Mental Health Bot Dockerfile - Railway Optimized
 FROM python:3.11-slim AS base
 
 # Set environment variables
@@ -26,17 +24,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create logs directory
-RUN mkdir -p /app/logs
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash botuser \
     && chown -R botuser:botuser /app
 USER botuser
-
-# Health check (optional - checks if process is running)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep -f "python bot.py" || exit 1
 
 # Default command
 CMD ["python", "bot.py"]
