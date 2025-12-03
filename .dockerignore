@@ -1,0 +1,49 @@
+# Docker ignore file - excludes files from Docker build context
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+.pytest_cache/
+
+# Environment files (secrets - don't bake into image)
+.env
+.env.*
+!.env.example
+
+# Logs (will be mounted as volume)
+logs/
+*.log
+
+# Data (will be mounted as volume)
+data/
+*.db
+*.sqlite3
+
+# Documentation
+*.md
+!README.md
+
+# Tests
+tests/
+test_*.py
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
