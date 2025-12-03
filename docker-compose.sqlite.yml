@@ -1,0 +1,29 @@
+# Mental Health Bot - SQLite Only (Lightweight)
+# Use this for local development or small deployments
+
+version: "3.8"
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mental-health-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Use SQLite (default)
+      DATABASE_URL: sqlite+aiosqlite:///./data/mental_health_bot.db
+      TZ: ${TIMEZONE:-UTC}
+    volumes:
+      # Persist SQLite database
+      - ./data:/app/data
+      # Persist logs
+      - ./logs:/app/logs
+    networks:
+      - mhbot-network
+
+networks:
+  mhbot-network:
+    driver: bridge
