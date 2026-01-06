@@ -10,7 +10,7 @@ from keyboards import KeyboardBuilder
 from services import UserService, ProfileService, HistoryService
 from states import OnboardingState
 from utils.constants import (
-    MESSAGES, EMOJI, STRESS_LEVEL_SCALE, ANXIETY_LEVEL_SCALE,
+    MESSAGES, EMOJI, STRESS_LEVEL_SCALE,
     SWEATING_LEVEL_SCALE, AGE_RANGE, HEART_RATE_RANGE, BREATHING_RATE_RANGE
 )
 from utils.helpers import format_scale_explanation, validate_numeric_input
@@ -261,29 +261,15 @@ async def process_therapy_frequency(callback: CallbackQuery, state: FSMContext):
 
 @router.message(OnboardingState.recent_life_events)
 async def process_life_events(message: Message, state: FSMContext):
-    """Process life events input."""
+    """Process life events input and show confirmation."""
     life_events = message.text if message.text.lower() != "skip" else None
     await state.update_data(recent_life_events=life_events)
-    await state.set_state(OnboardingState.anxiety_level)
     
-    explanation = format_scale_explanation(ANXIETY_LEVEL_SCALE, "Anxiety Level Scale")
-    
-    await message.answer(
-        f"😟 **Step 15/15: Current Anxiety Level**\n\n"
-        f"Rate your current anxiety level (1-10):\n\n"
-        f"{explanation}",
-        reply_markup=KeyboardBuilder.anxiety_level_keyboard(),
-        parse_mode="Markdown"
-    )
+    # Get all collected data for confirmation
+    data = await state.get_data()
 
 
-@router.callback_query(OnboardingState.anxiety_level, F.data.startswith("anxiety:"))
-async def process_anxiety_level(callback: CallbackQuery, state: FSMContext):
-    """Process anxiety level and show confirmation."""
-    anxiety = int(callback.data.split(":")[1])
-    await state.update_data(baseline_anxiety_level=anxiety)
-    
-    # Get all collected data
+    # Format confirmation summary
     data = await state.get_data()
     
     # Format summary
@@ -302,19 +288,17 @@ async def process_anxiety_level(callback: CallbackQuery, state: FSMContext):
         f"• Caffeine: {data.get('caffeine_intake')} cups/day\n"
         f"• Smoking: {data.get('smoking_habits', 'Not set').title()}\n\n"
         f"**Health Indicators:**\n"
-        f"• Stress Level: {data.get('baseline_stress_level')}/10\n"
-        f"• Anxiety Level: {data.get('baseline_anxiety_level')}/10\n\n"
+        f"• Stress Level: {data.get('baseline_stress_level')}/10\n\n"
         f"Is this information correct?"
     )
     
     await state.set_state(OnboardingState.confirmation)
     
-    await callback.message.edit_text(
+    await message.answer(
         summary,
         reply_markup=KeyboardBuilder.confirm_cancel("onboarding:confirm", "onboarding:restart"),
         parse_mode="Markdown"
     )
-    await callback.answer()
 
 
 @router.callback_query(OnboardingState.confirmation, F.data == "onboarding:confirm")
@@ -339,8 +323,7 @@ async def confirm_onboarding(callback: CallbackQuery, state: FSMContext):
         baseline_stress_level=data.get('baseline_stress_level'),
         family_anxiety_history=data.get('family_anxiety_history'),
         therapy_frequency=data.get('therapy_frequency'),
-        recent_life_events=data.get('recent_life_events'),
-        baseline_anxiety_level=data.get('baseline_anxiety_level')
+        recent_life_events=data.get('recent_life_events')
     )
     
     # Mark user as onboarded
@@ -405,7 +388,6 @@ async def onboarding_back(callback: CallbackQuery, state: FSMContext):
         OnboardingState.family_anxiety_history,
         OnboardingState.therapy_frequency,
         OnboardingState.recent_life_events,
-        OnboardingState.anxiety_level,
         OnboardingState.confirmation
     ]
     

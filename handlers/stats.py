@@ -30,12 +30,28 @@ async def cmd_stats(message: Message):
 @router.callback_query(F.data == "menu:stats")
 async def menu_stats(callback: CallbackQuery):
     """Show stats menu from main menu."""
-    await callback.message.edit_text(
-        f"📊 **Your Statistics**\n\n"
-        f"What would you like to see?",
-        reply_markup=KeyboardBuilder.stats_menu(),
-        parse_mode="Markdown"
-    )
+    try:
+        # Try to edit the message (works for text messages)
+        await callback.message.edit_text(
+            f"📊 **Your Statistics**\n\n"
+            f"What would you like to see?",
+            reply_markup=KeyboardBuilder.stats_menu(),
+            parse_mode="Markdown"
+        )
+    except Exception:
+        # If message is a photo or has no text, delete and send new
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        
+        await callback.message.answer(
+            f"📊 **Your Statistics**\n\n"
+            f"What would you like to see?",
+            reply_markup=KeyboardBuilder.stats_menu(),
+            parse_mode="Markdown"
+        )
+    
     await callback.answer()
 
 
@@ -58,11 +74,25 @@ async def show_stats_summary(callback: CallbackQuery):
     
     summary = format_statistics(stats)
     
-    await callback.message.edit_text(
-        summary,
-        reply_markup=KeyboardBuilder.back_button("menu:stats"),
-        parse_mode="Markdown"
-    )
+    try:
+        await callback.message.edit_text(
+            summary,
+            reply_markup=KeyboardBuilder.back_button("menu:stats"),
+            parse_mode="Markdown"
+        )
+    except Exception:
+        # If message is a photo or has no text, delete and send new
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        
+        await callback.message.answer(
+            summary,
+            reply_markup=KeyboardBuilder.back_button("menu:stats"),
+            parse_mode="Markdown"
+        )
+    
     await callback.answer()
 
 
@@ -393,9 +423,16 @@ async def show_predictions_history(callback: CallbackQuery):
     
     for pred in predictions:
         category_emoji = "💚" if pred.advice_category == "low" else ("💛" if pred.advice_category == "moderate" else "❤️")
+        # Map numeric level to class name
+        if pred.predicted_anxiety_level <= 4:
+            class_name = "Low"
+        elif pred.predicted_anxiety_level <= 7:
+            class_name = "Medium"
+        else:
+            class_name = "High"
         text += (
             f"{category_emoji} **{pred.created_at.strftime('%B %d, %Y')}**\n"
-            f"• Predicted Anxiety: {pred.predicted_anxiety_level}/10\n"
+            f"• Predicted Anxiety: {class_name}\n"
             f"• Confidence: {int(pred.confidence_score * 100) if pred.confidence_score else 'N/A'}%\n\n"
         )
     

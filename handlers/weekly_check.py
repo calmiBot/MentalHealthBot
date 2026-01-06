@@ -10,16 +10,30 @@ from aiogram.fsm.context import FSMContext
 from keyboards import KeyboardBuilder
 from services import (
     WeeklyAnswerService, PredictionService, HistoryService,
-    call_ai_model
+    call_ai_model, ProfileService
 )
 from states import WeeklyCheckState
 from utils.constants import (
-    MESSAGES, EMOJI, STRESS_LEVEL_SCALE, ANXIETY_LEVEL_SCALE,
+    MESSAGES, EMOJI, STRESS_LEVEL_SCALE,
     WEEK_RATING_SCALE, MEDICATION_ADHERENCE_OPTIONS
 )
 from utils.helpers import format_scale_explanation, calculate_week_dates, get_anxiety_category
 
 router = Router(name="weekly_check")
+
+
+# ==================== HELPER FUNCTIONS ====================
+
+def _convert_diet_quality(diet_str: str) -> int:
+    """Convert diet quality string to numeric scale."""
+    mapping = {'poor': 1, 'fair': 2, 'average': 3, 'good': 4, 'excellent': 5}
+    return mapping.get(str(diet_str).lower(), 3)
+
+
+def _convert_smoking(smoking_str: str) -> int:
+    """Convert smoking habit string to cigarettes per day estimate."""
+    mapping = {'none': 0, 'occasionally': 5, 'regularly': 15, 'heavily': 25}
+    return mapping.get(str(smoking_str).lower(), 0)
 
 
 # ==================== START WEEKLY ASSESSMENT ====================
@@ -154,29 +168,10 @@ async def process_significant_events(message: Message, state: FSMContext):
 
 @router.callback_query(WeeklyCheckState.therapy_attended, F.data.startswith("therapy:"))
 async def process_therapy_attended(callback: CallbackQuery, state: FSMContext):
-    """Process therapy attendance."""
+    """Process therapy attendance and complete assessment."""
+    user_id = callback.from_user.id
     attended = callback.data.split(":")[1] == "yes"
     await state.update_data(therapy_attended=attended)
-    await state.set_state(WeeklyCheckState.anxiety_level)
-    
-    explanation = format_scale_explanation(ANXIETY_LEVEL_SCALE, "Current Anxiety Level")
-    
-    await callback.message.edit_text(
-        f"😟 **Question 8/8: Current Anxiety**\n\n"
-        f"Rate your current anxiety level right now:\n\n"
-        f"{explanation}",
-        reply_markup=KeyboardBuilder.anxiety_level_keyboard(),
-        parse_mode="Markdown"
-    )
-    await callback.answer()
-
-
-@router.callback_query(WeeklyCheckState.anxiety_level, F.data.startswith("anxiety:"))
-async def process_weekly_anxiety(callback: CallbackQuery, state: FSMContext):
-    """Process weekly anxiety and complete assessment."""
-    user_id = callback.from_user.id
-    anxiety = int(callback.data.split(":")[1])
-    await state.update_data(anxiety_level=anxiety, avg_anxiety_level=float(anxiety))
     
     data = await state.get_data()
     
@@ -195,18 +190,42 @@ async def process_weekly_anxiety(callback: CallbackQuery, state: FSMContext):
         total_alcohol=data.get('total_alcohol'),
         overall_week_rating=data.get('overall_week_rating'),
         significant_events=data.get('significant_events'),
-        therapy_attended=data.get('therapy_attended'),
-        anxiety_level=anxiety
+        therapy_attended=data.get('therapy_attended')
     )
     
+    # Get user profile to merge with check-in data for better predictions
+    profile = await ProfileService.get_profile(user_id)
+    
+    # Build complete data for AI model (merge profile + weekly check-in)
+    ai_input = {
+        # From weekly check-in
+        'stress_level': data.get('avg_stress_level'),
+        'sleep_hours': data.get('avg_sleep_hours'),
+        'caffeine_intake': (data.get('total_caffeine', 0) or 0) // 7,  # Daily average
+        'alcohol_intake': data.get('total_alcohol', 0),
+    }
+    
+    # Add profile data if available
+    if profile:
+        ai_input.update({
+            'age': profile.age,
+            'gender': profile.gender,
+            'occupation': profile.occupation,
+            'physical_activity': profile.physical_activity,
+            'diet_quality': _convert_diet_quality(profile.diet_quality),
+            'smoking_habits': _convert_smoking(profile.smoking_habits),
+            'family_anxiety_history': 1 if profile.family_anxiety_history else 0,
+            'medication_use': 1 if profile.medication_use else 0,
+            'therapy_frequency': profile.therapy_frequency,
+            'recent_life_events': data.get('significant_events') or profile.recent_life_events,
+            'heart_rate': profile.baseline_heart_rate,
+            'breathing_rate': profile.baseline_breathing_rate,
+            'sweating_level': profile.sweating_level,
+            'dizziness_today': 1 if profile.dizziness_frequency in ['sometimes', 'often'] else 0,
+        })
+    
     # Get AI prediction
-    ai_result = await call_ai_model({
-        "anxiety_level": anxiety,
-        "stress_level": data.get('avg_stress_level'),
-        "sleep_hours": data.get('avg_sleep_hours'),
-        "caffeine_intake": data.get('total_caffeine', 0) // 7,  # Daily average
-        "alcohol_intake": data.get('total_alcohol', 0)
-    })
+    ai_result = await call_ai_model(ai_input)
     
     # Save prediction
     prediction = await PredictionService.create_prediction(
@@ -226,7 +245,7 @@ async def process_weekly_anxiety(callback: CallbackQuery, state: FSMContext):
         event_data={
             "weekly_answer_id": weekly_answer.id,
             "prediction_id": prediction.id,
-            "anxiety_level": anxiety
+            "anxiety_level": ai_result['predicted_anxiety_level']
         }
     )
     
@@ -244,14 +263,20 @@ async def process_weekly_anxiety(callback: CallbackQuery, state: FSMContext):
     else:
         emoji = "❤️"
     
+    # Get class name for display (Low, Medium, High)
+    class_name = ai_result.get('anxiety_class_name', 'Medium')
+    
+    # Escape special markdown characters in advice
+    advice_text = ai_result['advice'].replace('*', '\\*').replace('_', '\\_').replace('`', '\\`').replace('[', '\\[')
+    
     response = (
-        f"✅ **Weekly Assessment Complete!**\n\n"
-        f"**📊 Week Summary:**\n"
+        f"✅ *Weekly Assessment Complete!*\n\n"
+        f"*📊 Week Summary:*\n"
         f"• Average Stress: {data.get('avg_stress_level')}/10\n"
         f"• Average Sleep: {data.get('avg_sleep_hours')} hours\n"
         f"• Week Rating: {data.get('overall_week_rating')}/10\n\n"
-        f"{emoji} **Predicted Anxiety Level:** {anxiety_level}/10\n\n"
-        f"**💡 Advice:**\n{ai_result['advice']}"
+        f"{emoji} *Predicted Anxiety Level:* {class_name}\n\n"
+        f"*💡 Advice:*\n{advice_text}"
     )
     
     await callback.message.edit_text(

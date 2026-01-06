@@ -10,11 +10,11 @@ from aiogram.fsm.context import FSMContext
 from keyboards import KeyboardBuilder
 from services import (
     DailyAnswerService, PredictionService, HistoryService,
-    call_ai_model
+    call_ai_model, ProfileService
 )
 from states import DailyCheckState, FeedbackState
 from utils.constants import (
-    MESSAGES, EMOJI, STRESS_LEVEL_SCALE, ANXIETY_LEVEL_SCALE,
+    MESSAGES, EMOJI, STRESS_LEVEL_SCALE,
     MOOD_RATING_SCALE, ENERGY_LEVEL_SCALE, SWEATING_LEVEL_SCALE,
     PROFESSIONAL_HELP_WARNING
 )
@@ -61,7 +61,7 @@ async def daily_start(callback: CallbackQuery, state: FSMContext):
     explanation = format_scale_explanation(STRESS_LEVEL_SCALE, "Stress Level")
     
     await callback.message.edit_text(
-        f"😰 **Question 1/7: Stress Level**\n\n"
+        f"😰 **Question 1/6: Stress Level**\n\n"
         f"How stressed are you feeling right now?\n\n"
         f"{explanation}",
         reply_markup=KeyboardBuilder.stress_level_keyboard(),
@@ -70,7 +70,7 @@ async def daily_start(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ==================== ESSENTIAL QUESTIONS (1-7) ====================
+# ==================== ESSENTIAL QUESTIONS (1-6) ====================
 
 @router.callback_query(DailyCheckState.stress_level, F.data.startswith("stress:"))
 async def process_daily_stress(callback: CallbackQuery, state: FSMContext):
@@ -80,7 +80,7 @@ async def process_daily_stress(callback: CallbackQuery, state: FSMContext):
     await state.set_state(DailyCheckState.sleep_hours)
     
     await callback.message.edit_text(
-        f"😴 **Question 2/7: Sleep**\n\n"
+        f"😴 **Question 2/6: Sleep**\n\n"
         f"How many hours did you sleep last night?",
         reply_markup=KeyboardBuilder.sleep_hours_keyboard(),
         parse_mode="Markdown"
@@ -96,7 +96,7 @@ async def process_daily_sleep(callback: CallbackQuery, state: FSMContext):
     await state.set_state(DailyCheckState.heart_rate)
     
     await callback.message.edit_text(
-        f"💓 **Question 3/7: Heart Rate**\n\n"
+        f"💓 **Question 3/6: Heart Rate**\n\n"
         f"What's your approximate heart rate (bpm)?\n\n"
         f"_You can measure this by counting your pulse for 15 seconds and multiplying by 4._",
         reply_markup=KeyboardBuilder.heart_rate_keyboard(),
@@ -127,7 +127,7 @@ async def process_daily_heart_rate(callback: CallbackQuery, state: FSMContext):
     await state.set_state(DailyCheckState.breathing_rate)
     
     await callback.message.edit_text(
-        f"🌬️ **Question 4/7: Breathing Rate**\n\n"
+        f"🌬️ **Question 4/6: Breathing Rate**\n\n"
         f"What's your breathing rate (breaths per minute)?\n\n"
         f"_Normal range is 12-20 breaths per minute._",
         reply_markup=KeyboardBuilder.breathing_rate_keyboard(),
@@ -152,7 +152,7 @@ async def process_manual_heart_rate(message: Message, state: FSMContext):
     await state.set_state(DailyCheckState.breathing_rate)
     
     await message.answer(
-        f"🌬️ **Question 4/7: Breathing Rate**\n\n"
+        f"🌬️ **Question 4/6: Breathing Rate**\n\n"
         f"What's your breathing rate (breaths per minute)?",
         reply_markup=KeyboardBuilder.breathing_rate_keyboard(),
         parse_mode="Markdown"
@@ -181,7 +181,7 @@ async def process_daily_breathing_rate(callback: CallbackQuery, state: FSMContex
     await state.set_state(DailyCheckState.caffeine_intake)
     
     await callback.message.edit_text(
-        f"☕ **Question 5/7: Caffeine Today**\n\n"
+        f"☕ **Question 5/6: Caffeine Today**\n\n"
         f"How many caffeinated drinks have you had today?",
         reply_markup=KeyboardBuilder.caffeine_intake_keyboard(),
         parse_mode="Markdown"
@@ -204,7 +204,7 @@ async def process_manual_breathing_rate(message: Message, state: FSMContext):
     await state.set_state(DailyCheckState.caffeine_intake)
     
     await message.answer(
-        f"☕ **Question 5/7: Caffeine Today**\n\n"
+        f"☕ **Question 5/6: Caffeine Today**\n\n"
         f"How many caffeinated drinks have you had today?",
         reply_markup=KeyboardBuilder.caffeine_intake_keyboard(),
         parse_mode="Markdown"
@@ -219,7 +219,7 @@ async def process_daily_caffeine(callback: CallbackQuery, state: FSMContext):
     await state.set_state(DailyCheckState.alcohol_intake)
     
     await callback.message.edit_text(
-        f"🍷 **Question 6/7: Alcohol Today**\n\n"
+        f"🍷 **Question 6/6: Alcohol Today**\n\n"
         f"How many alcoholic drinks have you had today?",
         reply_markup=KeyboardBuilder.alcohol_intake_keyboard(),
         parse_mode="Markdown"
@@ -229,28 +229,9 @@ async def process_daily_caffeine(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(DailyCheckState.alcohol_intake, F.data.startswith("alcohol:"))
 async def process_daily_alcohol(callback: CallbackQuery, state: FSMContext):
-    """Process alcohol intake."""
+    """Process alcohol intake and move to extended questions prompt."""
     alcohol = int(callback.data.split(":")[1])
     await state.update_data(alcohol_intake=alcohol)
-    await state.set_state(DailyCheckState.anxiety_level)
-    
-    explanation = format_scale_explanation(ANXIETY_LEVEL_SCALE, "Anxiety Level")
-    
-    await callback.message.edit_text(
-        f"😟 **Question 7/7: Anxiety Level**\n\n"
-        f"Rate your current anxiety level:\n\n"
-        f"{explanation}",
-        reply_markup=KeyboardBuilder.anxiety_level_keyboard(),
-        parse_mode="Markdown"
-    )
-    await callback.answer()
-
-
-@router.callback_query(DailyCheckState.anxiety_level, F.data.startswith("anxiety:"))
-async def process_daily_anxiety(callback: CallbackQuery, state: FSMContext):
-    """Process anxiety level and offer extended questions."""
-    anxiety = int(callback.data.split(":")[1])
-    await state.update_data(anxiety_level=anxiety)
     await state.set_state(DailyCheckState.show_extended)
     
     await callback.message.edit_text(
@@ -385,7 +366,6 @@ async def complete_daily_checkin(event, state: FSMContext, is_callback: bool = F
         sleep_hours=data.get('sleep_hours'),
         caffeine_intake=data.get('caffeine_intake'),
         alcohol_intake=data.get('alcohol_intake'),
-        anxiety_level=data.get('anxiety_level'),
         mood_rating=data.get('mood_rating'),
         energy_level=data.get('energy_level'),
         sweating_level=data.get('sweating_level'),
@@ -394,8 +374,39 @@ async def complete_daily_checkin(event, state: FSMContext, is_callback: bool = F
         is_extended=data.get('is_extended', False)
     )
     
+    # Get user profile to merge with check-in data for better predictions
+    profile = await ProfileService.get_profile(user_id)
+    
+    # Build complete data for AI model (merge profile + daily check-in)
+    ai_input = {
+        # From daily check-in
+        'stress_level': data.get('stress_level'),
+        'sleep_hours': data.get('sleep_hours'),
+        'heart_rate': data.get('heart_rate'),
+        'breathing_rate': data.get('breathing_rate'),
+        'caffeine_intake': data.get('caffeine_intake'),
+        'alcohol_intake': data.get('alcohol_intake'),
+        'sweating_level': data.get('sweating_level'),
+        'dizziness_today': data.get('dizziness_today'),
+    }
+    
+    # Add profile data if available
+    if profile:
+        ai_input.update({
+            'age': profile.age,
+            'gender': profile.gender,
+            'occupation': profile.occupation,
+            'physical_activity': profile.physical_activity,
+            'diet_quality': _convert_diet_quality(profile.diet_quality),
+            'smoking_habits': _convert_smoking(profile.smoking_habits),
+            'family_anxiety_history': 1 if profile.family_anxiety_history else 0,
+            'medication_use': 1 if profile.medication_use else 0,
+            'therapy_frequency': profile.therapy_frequency,
+            'recent_life_events': profile.recent_life_events,
+        })
+    
     # Get AI prediction
-    ai_result = await call_ai_model(data)
+    ai_result = await call_ai_model(ai_input)
     
     # Save prediction
     prediction = await PredictionService.create_prediction(
@@ -429,15 +440,21 @@ async def complete_daily_checkin(event, state: FSMContext, is_callback: bool = F
     
     if category == "low":
         emoji = "💚"
-    elif category == "moderate":
+    elif category == "medium":
         emoji = "💛"
     else:
         emoji = "❤️"
     
+    # Get class name for display (Low, Medium, High)
+    class_name = ai_result.get('anxiety_class_name', 'Medium')
+    
+    # Escape special markdown characters in advice
+    advice_text = ai_result['advice'].replace('*', '\\*').replace('_', '\\_').replace('`', '\\`').replace('[', '\\[')
+    
     response = (
-        f"✅ **Check-in Complete!**\n\n"
-        f"{emoji} **Predicted Anxiety Level:** {anxiety_level}/10\n\n"
-        f"**💡 Advice:**\n{ai_result['advice']}"
+        f"✅ *Check-in Complete!*\n\n"
+        f"{emoji} *Predicted Anxiety Level:* {class_name}\n\n"
+        f"*💡 Advice:*\n{advice_text}"
     )
     
     # Send response
@@ -551,3 +568,29 @@ async def process_detailed_feedback(message: Message, state: FSMContext):
 async def daily_back(callback: CallbackQuery, state: FSMContext):
     """Handle back during daily check-in."""
     await callback.answer("Please complete the check-in or use /cancel to exit.")
+
+# ==================== HELPER FUNCTIONS ====================
+
+def _convert_diet_quality(diet_str: str) -> int:
+    """Convert diet quality string to numeric scale (1-10)."""
+    if not diet_str:
+        return 6  # Default neutral
+    mapping = {
+        'poor': 2,
+        'fair': 4,
+        'good': 7,
+        'excellent': 9
+    }
+    return mapping.get(diet_str.lower(), 6)
+
+
+def _convert_smoking(smoking_str: str) -> int:
+    """Convert smoking habit string to numeric (0=never, 1=former, 2=current)."""
+    if not smoking_str:
+        return 0
+    mapping = {
+        'never': 0,
+        'former': 1,
+        'current': 2
+    }
+    return mapping.get(smoking_str.lower(), 0)

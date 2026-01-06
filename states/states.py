@@ -41,9 +41,6 @@ class OnboardingState(StatesGroup):
     # Life Events
     recent_life_events = State()
     
-    # Target Variable
-    anxiety_level = State()
-    
     # Confirmation
     confirmation = State()
 
@@ -58,7 +55,6 @@ class DailyCheckState(StatesGroup):
     sleep_hours = State()
     caffeine_intake = State()
     alcohol_intake = State()
-    anxiety_level = State()
     
     # Extended questions (optional)
     show_extended = State()
@@ -90,9 +86,6 @@ class WeeklyCheckState(StatesGroup):
     significant_events = State()
     medication_adherence = State()
     therapy_attended = State()
-    
-    # Final anxiety assessment
-    anxiety_level = State()
     
     # Confirmation
     confirmation = State()
